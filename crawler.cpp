@@ -13,15 +13,14 @@ void pageDisplay(int idx, string url, string title){
 }
 
 int main(){
-	//Primeira URL a ser coletada
-	//e número de URLs a serem
-	//posteriormente pesquisadas
+	//Input given parameters, inital url
+	//and number of n link pages to be crawled
+	//from it
 	string firstURL; cin >> firstURL;
 	int n; cin >> n;
 
-	//Inicializa spider com a primeira
-	//URL dada no input e exibe seu título
-	//e sua url
+	//Initialize the spider object
+	//with the input link url
 	CkSpider spider;
 
 	spider.Initialize(firstURL.c_str());
@@ -29,20 +28,20 @@ int main(){
 
 	auto initialExeTime = chrono::high_resolution_clock::now();
 
-	//Procura por outras n páginas a partir da url
-	//disponibilizada inicialmente
+	//Crawl through n+1 link webpages, 
+	//beggining at the url given at the input 
 	for (int i = 0; i < n+1; i++){
 		bool found = spider.CrawlNext();
 		
-		//Caso encontremos, exibimos a página
+		//If a link page is found, we display it
 		if (found)
 			pageDisplay(i, spider.lastUrl(), spider.lastHtmlTitle());
-		//Caso contrário,
+		//Otherwise,
 		else {
-			//Não existem mais páginas a serem coletadas na url inicial
+			//There're no more page links to be crawled in our inital url
 			if (!spider.get_NumUnspidered())
-				cout << "Nao existem mais paginas a serem coletadas" << endl;
-			//Ocorreu um erro durante a coleta
+				cout << "There're no more pages to be crawled" << endl;
+			//An erros has been found
 			else
 				cout << spider.lastErrorText() << "\r\n" << endl;
 		}
@@ -52,8 +51,10 @@ int main(){
 
 	auto finalExeTime = std::chrono::high_resolution_clock::now();
 
+	//Find total and average program execution time, desconsidering the sleep
+	//delay of 1 second per page
 	double exeTime = chrono::duration_cast<std::chrono::microseconds>(finalExeTime - initialExeTime).count(); 
 	double avgExeTime = (exeTime*1e-6)/(n+1) - 1;
 
-	cout << "Tempo de coleta de páginas médio: " << avgExeTime << endl;
+	cout << "Average crawling time: " << avgExeTime << endl;
 }
