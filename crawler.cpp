@@ -56,5 +56,5 @@ int main(){
 	double exeTime = chrono::duration_cast<std::chrono::microseconds>(finalExeTime - initialExeTime).count(); 
 	double avgExeTime = (exeTime*1e-6)/(n+1) - 1;
 
-	cout << "Average crawling time: " << avgExeTime << endl;
+	cout << "Average crawling time in seconds: " << avgExeTime << endl;
 }
