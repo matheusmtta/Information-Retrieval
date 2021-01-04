@@ -12,12 +12,43 @@ const int MAX = 1000;
 
 int countSearched = 0;
 
-int id = 0;
 map <string, int> searchedTable;
 map <string, int> domainsTable;
-set <string> currSearchDomains; 
+map <string, int> isSearchingDomain;
 
 priority_queue <webPage> longTermScheduler;	
+
+bool updateLongTermScheduler(CkSpider &stsSpider, string &currURL, string &currDomain){
+	bool firstCrawl = stsSpider.CrawlNext();
+	if (!firstCrawl)
+		return false;
+
+	countSearched++;
+	searchedTable[currURL]++;
+	cout << "<== Searching " << countSearched  << " : " << currURL << ", within " << currDomain << " (SHORT TERM SCHEDULER)" << endl << endl; 
+
+	for (int i = 0; i < stsSpider.get_NumOutboundLinks(); i++){
+		CkSpider auxSpider;
+		string nextSeedURL, nextSeedDomain;
+
+		try{
+			nextSeedDomain = auxSpider.getUrlDomain(stsSpider.getOutboundLink(i));
+			nextSeedURL = auxSpider.canonicalizeUrl(stsSpider.getOutboundLink(i));
+		} catch (exception &e){
+			continue;
+		}
+
+		if (searchedTable.find(nextSeedURL) != searchedTable.end())
+			continue;
+
+		//cout << "==> Adding: " << nextSeedURL << ", within: " << nextSeedDomain << " (LONG TERM SCHEDULER)" << endl;
+		webPage newWebPage(nextSeedURL, nextSeedDomain, domainsTable[nextSeedDomain]++);
+		longTermScheduler.push(newWebPage);
+	}
+	stsSpider.SleepMs(100);
+
+	return true;
+}
 
 void STScheduler(webPage currWebPage){
 	CkSpider stsSpider;
@@ -28,32 +59,8 @@ void STScheduler(webPage currWebPage){
 	stsSpider.Initialize(currDomain.c_str());
 	stsSpider.AddUnspidered(currURL.c_str());
 
-	bool firstCrawl = stsSpider.CrawlNext();
+	bool firstCrawl = updateLongTermScheduler(stsSpider, currURL, currDomain);
 	if (firstCrawl){
-		countSearched++;
-		searchedTable[currURL]++;
-		//cout << "Searched " << countSearched << ": " << currURL << " within domain " << currDomain << endl << endl;
-
-		for (int i = 0; i < stsSpider.get_NumOutboundLinks(); i++){
-			CkSpider auxSpider;
-			string nextSeedURL, nextSeedDomain;
-
-			try{
-				cout << "IN " << i << ' ' << stsSpider.get_NumOutboundLinks() << endl;
-				nextSeedDomain = auxSpider.getUrlDomain(stsSpider.getOutboundLink(i));
-				nextSeedURL = auxSpider.canonicalizeUrl(stsSpider.getOutboundLink(i));
-				cout << nextSeedURL << endl;
-				cout << "OUT" << endl;
-			} catch (exception &e){
-				continue;
-			}
-
-			webPage newWebPage(nextSeedURL, nextSeedDomain, id++, domainsTable[nextSeedDomain]++);
-			longTermScheduler.push(newWebPage);
-			//cout << "=>> Adding: " << nextSeedURL << " (LongTerm Scheduler) within domain " << nextSeedDomain << endl << endl;
-		}
-		stsSpider.SleepMs(100);
-
 		int inBoundLinks = stsSpider.get_NumUnspidered();
 		for (int i = 0; i < inBoundLinks && countSearched < MAX; i++){
 			string nextURL;
@@ -67,13 +74,17 @@ void STScheduler(webPage currWebPage){
 				continue;
 			}
 
-			bool inBoundCrawling = stsSpider.CrawlNext();
-			if (inBoundCrawling){
-				countSearched++;
-				searchedTable[nextURL]++;
+			if (searchedTable.find(nextURL) != searchedTable.end())
+				stsSpider.SkipUnspidered(0);
+			else{
+				bool inBoundCrawling = stsSpider.CrawlNext();
+				if (inBoundCrawling){
+					countSearched++;
+					searchedTable[nextURL]++;
+					cout << "<== Searching " << countSearched  << " : " << nextURL << ", within " << currDomain << "." << endl << endl; 
+				}
+				stsSpider.SleepMs(100);
 			}
-
-			stsSpider.SleepMs(200);
 		}
 	}
 }
@@ -88,7 +99,9 @@ int main(){
 		string seedUrl = auxSpider.canonicalizeUrl(str.c_str());
 		string seedDomain = auxSpider.getUrlDomain(seedUrl.c_str()); 
 
-		webPage newWebPage(seedUrl, seedDomain, id++, domainsTable[seedDomain]++);
+		cout << "==> Adding " << seedUrl << " within: " << seedDomain << " (LONG TERM SCHEDULER)" << endl;
+
+		webPage newWebPage(seedUrl, seedDomain, domainsTable[seedDomain]++);
 		longTermScheduler.push(newWebPage);
 	}
 
