@@ -225,11 +225,6 @@ int main(){
 	thread t18(STScheduler);
 	thread t19(STScheduler);
 	thread t20(STScheduler);
-	thread t21(STScheduler);
-	thread t22(STScheduler);
-	thread t23(STScheduler);
-	thread t24(STScheduler);
-	thread t25(STScheduler);
 	t1.join();
 	t2.join();
 	t3.join();
@@ -250,11 +245,6 @@ int main(){
 	t18.join();
 	t19.join();
 	t20.join();
-	t21.join();
-	t22.join();
-	t23.join();
-	t24.join();
-	t25.join();
 
 	return 0;
 
