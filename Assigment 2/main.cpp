@@ -8,84 +8,184 @@
 
 using namespace std;
 
-const int MAX = 1000;
+const int MAX = 10000;
 
+int idCrawler = 0;
 int countSearched = 0;
 
 map <string, int> searchedTable;
 map <string, int> domainsTable;
-map <string, int> isSearchingDomain;
+map <string, bool> currSearchingDomain;
 
 priority_queue <webPage> longTermScheduler;	
 
-bool updateLongTermScheduler(CkSpider &stsSpider, string &currURL, string &currDomain){
-	bool firstCrawl = stsSpider.CrawlNext();
-	if (!firstCrawl)
-		return false;
+mutex stLock, countLock, dtLock, csdLock, ltsLock, idCra;
+
+int getCount(){
+	countLock.lock();
+	int rsp = countSearched;
+	countLock.unlock();
+	return rsp;
+}
+
+bool crawlingFinished(){
+	countLock.lock();
+	int currCount = countSearched;
+	countLock.unlock();
+
+	return currCount >= MAX;
+}
+
+bool isVisited(string url){
+	stLock.lock();
+	bool found = searchedTable.find(url) != searchedTable.end();
+	stLock.unlock();
+
+	return found;
+}
+
+void addSearchedURL(string url){
+	stLock.lock();
+	countLock.lock();
 
 	countSearched++;
-	searchedTable[currURL]++;
-	cout << "<== Searching " << countSearched  << " : " << currURL << ", within " << currDomain << " (SHORT TERM SCHEDULER)" << endl << endl; 
+	searchedTable[url]++;
 
-	for (int i = 0; i < stsSpider.get_NumOutboundLinks(); i++){
-		CkSpider auxSpider;
+	stLock.unlock();
+	countLock.unlock();
+}
+
+bool updateLongTermScheduler(CkSpider &stsSpider, string &currURL){
+	bool firstCrawl = stsSpider.CrawlNext();
+	if (!firstCrawl || crawlingFinished())
+		return false;
+
+	addSearchedURL(currURL);
+
+	int outBoundLinks = stsSpider.get_NumOutboundLinks();
+	for (int i = 0; i < outBoundLinks; i++){
+		
 		string nextSeedURL, nextSeedDomain;
 
 		try{
-			nextSeedDomain = auxSpider.getUrlDomain(stsSpider.getOutboundLink(i));
-			nextSeedURL = auxSpider.canonicalizeUrl(stsSpider.getOutboundLink(i));
+			string failNextSeedDomain(stsSpider.getUrlDomain(stsSpider.getOutboundLink(i)));
+			string failNextSeedUrl(stsSpider.getOutboundLink(i));
+			string failCanonicalize(stsSpider.getUrlDomain(stsSpider.getOutboundLink(i)));
 		} catch (exception &e){
 			continue;
 		}
 
-		if (searchedTable.find(nextSeedURL) != searchedTable.end())
+		nextSeedURL = stsSpider.canonicalizeUrl(stsSpider.getOutboundLink(i));
+		nextSeedDomain = stsSpider.getUrlDomain(stsSpider.getOutboundLink(i));
+
+		if (isVisited(nextSeedURL))
 			continue;
 
-		//cout << "==> Adding: " << nextSeedURL << ", within: " << nextSeedDomain << " (LONG TERM SCHEDULER)" << endl;
+		ltsLock.lock();
+		dtLock.lock();
+		
 		webPage newWebPage(nextSeedURL, nextSeedDomain, domainsTable[nextSeedDomain]++);
 		longTermScheduler.push(newWebPage);
+	
+		ltsLock.unlock();
+		dtLock.unlock();
 	}
 	stsSpider.SleepMs(100);
 
 	return true;
 }
 
-void STScheduler(webPage currWebPage){
-	CkSpider stsSpider;
+void STScheduler(){
+	idCra.lock();
+	int currIdCrawler = idCrawler++;
+	idCra.unlock();
+	while (!crawlingFinished()){
+		CkSpider stsSpider;
+		string currURL, currDomain;
 
-	string currURL = currWebPage.url;
-	string currDomain = currWebPage.domain;
+		bool startSearching = false, domainAvailable = false;
+		while (!startSearching && !domainAvailable){
+			if (crawlingFinished())
+				return;
 
-	stsSpider.Initialize(currDomain.c_str());
-	stsSpider.AddUnspidered(currURL.c_str());
+			ltsLock.lock();
+			startSearching = !longTermScheduler.empty();
+			if (startSearching){
+				stack <webPage> tmpStk;
 
-	bool firstCrawl = updateLongTermScheduler(stsSpider, currURL, currDomain);
-	if (firstCrawl){
-		int inBoundLinks = stsSpider.get_NumUnspidered();
-		for (int i = 0; i < inBoundLinks && countSearched < MAX; i++){
-			string nextURL;
-			
-			try{
-				if (stsSpider.get_NumUnspidered())
-					nextURL = stsSpider.getUnspideredUrl(0);
-				else continue;
-			} catch (exception &e){
-				stsSpider.SkipUnspidered(0);
-				continue;
-			}
+				while (!longTermScheduler.empty() && !domainAvailable){
+					webPage currWebPage = longTermScheduler.top();
+					longTermScheduler.pop();
+					
+					currURL = currWebPage.url;
+					currDomain = currWebPage.domain;
+					
+					csdLock.lock();
+					
+					bool isDomainInThread = currSearchingDomain[currDomain];
+					if (!isDomainInThread){
+						currSearchingDomain[currDomain] = true;
+						domainAvailable = true;
+					}
+					else 
+						tmpStk.push(currWebPage);
 
-			if (searchedTable.find(nextURL) != searchedTable.end())
-				stsSpider.SkipUnspidered(0);
-			else{
-				bool inBoundCrawling = stsSpider.CrawlNext();
-				if (inBoundCrawling){
-					countSearched++;
-					searchedTable[nextURL]++;
-					cout << "<== Searching " << countSearched  << " : " << nextURL << ", within " << currDomain << "." << endl << endl; 
+					csdLock.unlock();
 				}
-				stsSpider.SleepMs(100);
+
+				while (!tmpStk.empty()){
+					webPage tmpWebPage = tmpStk.top();
+					tmpStk.pop();
+					longTermScheduler.push(tmpWebPage);
+				}
+			}
+			ltsLock.unlock();
+
+			if (!startSearching)
+				stsSpider.SleepMs(2000);
+		}
+		if (!domainAvailable)
+			return;
+
+		stsSpider.Initialize(currDomain.c_str());
+		stsSpider.AddUnspidered(currURL.c_str());
+
+		bool firstCrawl = updateLongTermScheduler(stsSpider, currURL);
+		if (firstCrawl){
+			int inBoundLinks = stsSpider.get_NumUnspidered();
+			for (int i = 0; i < inBoundLinks; i++){
+				if (crawlingFinished())
+					return;
+
+				string nextURL;
+				
+				try{
+					string failNexUrl(stsSpider.getUnspideredUrl(0));
+					string failCanonicalize(stsSpider.canonicalizeUrl(stsSpider.getUnspideredUrl(0)));
+				} catch (exception &e){
+					stsSpider.SkipUnspidered(0);
+					continue;
+				}
+
+				nextURL = stsSpider.canonicalizeUrl(stsSpider.getUnspideredUrl(0));
+
+				if (isVisited(nextURL))
+					stsSpider.SkipUnspidered(0);
+				else{
+					bool inBoundCrawling = stsSpider.CrawlNext();
+					if (inBoundCrawling){
+						addSearchedURL(nextURL);
+						cout << "==> From thread " << currIdCrawler << ": " << nextURL << ", ID = " << getCount() << "." << endl << endl;
+					}
+
+					stsSpider.SleepMs(100);
+				}
 			}
 		}
+
+		csdLock.lock();
+		currSearchingDomain[currDomain] = false;
+		csdLock.unlock();
 	}
 }
 
@@ -99,18 +199,63 @@ int main(){
 		string seedUrl = auxSpider.canonicalizeUrl(str.c_str());
 		string seedDomain = auxSpider.getUrlDomain(seedUrl.c_str()); 
 
-		cout << "==> Adding " << seedUrl << " within: " << seedDomain << " (LONG TERM SCHEDULER)" << endl;
+		currSearchingDomain[seedDomain] = false;
 
 		webPage newWebPage(seedUrl, seedDomain, domainsTable[seedDomain]++);
 		longTermScheduler.push(newWebPage);
 	}
 
-	while (!longTermScheduler.empty() && countSearched < MAX){
-		webPage search = longTermScheduler.top();
-		longTermScheduler.pop();
-		
-		STScheduler(search);
-	}
+	thread t1(STScheduler);
+	thread t2(STScheduler);
+	thread t3(STScheduler);
+	thread t4(STScheduler);
+	thread t5(STScheduler);
+	thread t6(STScheduler);
+	thread t7(STScheduler);
+	thread t8(STScheduler);
+	thread t9(STScheduler);
+	thread t10(STScheduler);
+	thread t11(STScheduler);
+	thread t12(STScheduler);
+	thread t13(STScheduler);
+	thread t14(STScheduler);
+	thread t15(STScheduler);
+	thread t16(STScheduler);
+	thread t17(STScheduler);
+	thread t18(STScheduler);
+	thread t19(STScheduler);
+	thread t20(STScheduler);
+	thread t21(STScheduler);
+	thread t22(STScheduler);
+	thread t23(STScheduler);
+	thread t24(STScheduler);
+	thread t25(STScheduler);
+	t1.join();
+	t2.join();
+	t3.join();
+	t4.join();
+	t5.join();
+	t6.join();
+	t7.join();
+	t8.join();
+	t9.join();
+	t10.join();
+	t11.join();
+	t12.join();
+	t13.join();
+	t14.join();
+	t15.join();
+	t16.join();
+	t17.join();
+	t18.join();
+	t19.join();
+	t20.join();
+	t21.join();
+	t22.join();
+	t23.join();
+	t24.join();
+	t25.join();
 
 	return 0;
+
 }

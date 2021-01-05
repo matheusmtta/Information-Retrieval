@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS=-Wall -Wextra
+CFLAGS=-Wall -Wextra -fsanitize=address,undefined -fno-omit-frame-pointer -g
 EXEC=./main
 LIBS=-lchilkat-9.5.0 -lresolv -lpthread
 CHILKAT=../chilkat-9.5.0-x86_64-linux-gcc#link for chilkat lib

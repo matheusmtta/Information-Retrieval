@@ -9,13 +9,15 @@ class webPage {
 	public:
 		string url;
 		string domain;
-		//string html;
+		string title;
 
-		int id;
+		int crawlingID;
+		int parentID;
+		int searchID;
 		int urlWgt;
 		int domainWgt; 
 
-		webPage (string url, string domain, int domainWgt) : url(url), domain(domain), domainWgt(domainWgt) {
+		webPage (string url, string domain, int domainWgt = 0) : url(url), domain(domain), domainWgt(domainWgt) {
 			getUrlWeight();
 		}
 
@@ -27,9 +29,21 @@ class webPage {
 			return weight;
 		}
 
-		void setID(int id){
-			this->id = id;
-		}
+		// void setCrawlingID(int crawlingID){
+		// 	this->crawlingId = id;
+		// }
+
+		// void setSearchID(int searchID){
+		// 	this->searchId = id;
+		// }
+
+		// void setParent(int parentID){
+		// 	this->parentID = parentID;
+		// }
+
+		// void setTitle(string title){
+		// 	this->title = title;
+		// }
 
 		//void saveInfo(){
 
