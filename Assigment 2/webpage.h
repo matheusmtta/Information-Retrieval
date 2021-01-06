@@ -5,51 +5,36 @@
 
 using namespace std;
 
-class webPage {
+class WebPage {
 	public:
 		string url;
 		string domain;
 		string title;
 
-		int crawlingID;
-		int parentID;
-		int searchID;
-		int urlWgt;
-		int domainWgt; 
+		bool crawled = false;
+		int level;
+		int id;
 
-		webPage (string url, string domain, int domainWgt = 0) : url(url), domain(domain), domainWgt(domainWgt) {
-			getUrlWeight();
+		int numInboundCrawledPages;
+		int numOutboundCrawledPages;
+		double avgSearchTime;
+
+		WebPage (string url, string domain, string title, int level, int id) : 
+			url(url), domain(domain), title(title), level(level), id(id) {
 		}
 
-		int getUrlWeight(){
-			int weight = 0;
-			for (char ch : url)
-				if (ch == '.' || ch == '/')
-					weight += 1;
-			return weight;
+		void saveInfo(string &html){
+			string path = "htmlFiles/" + to_string(id) + ".html";
+			ofstream outfile(path);
+			outfile << html << endl;
+			outfile.close();
 		}
 
-		// void setCrawlingID(int crawlingID){
-		// 	this->crawlingId = id;
-		// }
-
-		// void setSearchID(int searchID){
-		// 	this->searchId = id;
-		// }
-
-		// void setParent(int parentID){
-		// 	this->parentID = parentID;
-		// }
-
-		// void setTitle(string title){
-		// 	this->title = title;
-		// }
-
-		//void saveInfo(){
-
-		//}
+		void report(){
+			cout << "Page ID: " << id << endl;
+			cout << "=> " << title << endl;
+			cout << "URL: " << url << endl << endl;
+		}
 };
-
-bool operator<(const webPage &lhs, const webPage &rhs);
 
 #endif
