@@ -8,7 +8,7 @@
 
 using namespace std;
 
-const int MAX = 10000;
+const int MAX = 100000;
 
 int idCrawler = 0;
 int countSearched = 0;
@@ -68,14 +68,13 @@ bool updateLongTermScheduler(CkSpider &stsSpider, string &currURL){
 		string nextSeedURL, nextSeedDomain;
 
 		try{
-			string failNextSeedDomain(stsSpider.getUrlDomain(stsSpider.getOutboundLink(i)));
-			string failNextSeedUrl(stsSpider.getOutboundLink(i));
-			string failCanonicalize(stsSpider.getUrlDomain(stsSpider.getOutboundLink(i)));
+			string failSeedDomain(stsSpider.getUrlDomain(stsSpider.getOutboundLink(i)));
+			string failSeedUrl(stsSpider.getOutboundLink(i));
 		} catch (exception &e){
 			continue;
 		}
 
-		nextSeedURL = stsSpider.canonicalizeUrl(stsSpider.getOutboundLink(i));
+		nextSeedURL = stsSpider.getOutboundLink(i);
 		nextSeedDomain = stsSpider.getUrlDomain(stsSpider.getOutboundLink(i));
 
 		if (isVisited(nextSeedURL))
@@ -95,7 +94,7 @@ bool updateLongTermScheduler(CkSpider &stsSpider, string &currURL){
 	return true;
 }
 
-void STScheduler(){
+void Crawler(){
 	idCra.lock();
 	int currIdCrawler = idCrawler++;
 	idCra.unlock();
@@ -103,8 +102,9 @@ void STScheduler(){
 		CkSpider stsSpider;
 		string currURL, currDomain;
 
+		int attempts = 50;
 		bool startSearching = false, domainAvailable = false;
-		while (!startSearching && !domainAvailable){
+		while (!startSearching && !domainAvailable && attempts--){
 			if (crawlingFinished())
 				return;
 
@@ -160,14 +160,14 @@ void STScheduler(){
 				string nextURL;
 				
 				try{
-					string failNexUrl(stsSpider.getUnspideredUrl(0));
-					string failCanonicalize(stsSpider.canonicalizeUrl(stsSpider.getUnspideredUrl(0)));
+					string failNextDomain(stsSpider.getUrlDomain(stsSpider.getUnspideredUrl(0)));
+					string failNextUrl(stsSpider.getUnspideredUrl(0));
 				} catch (exception &e){
 					stsSpider.SkipUnspidered(0);
 					continue;
 				}
 
-				nextURL = stsSpider.canonicalizeUrl(stsSpider.getUnspideredUrl(0));
+				nextURL = stsSpider.getUnspideredUrl(0);
 
 				if (isVisited(nextURL))
 					stsSpider.SkipUnspidered(0);
@@ -196,7 +196,7 @@ int main(){
 		CkSpider auxSpider;
 		string str; cin >> str;
 
-		string seedUrl = auxSpider.canonicalizeUrl(str.c_str());
+		string seedUrl = str.c_str();
 		string seedDomain = auxSpider.getUrlDomain(seedUrl.c_str()); 
 
 		currSearchingDomain[seedDomain] = false;
@@ -205,46 +205,17 @@ int main(){
 		longTermScheduler.push(newWebPage);
 	}
 
-	thread t1(STScheduler);
-	thread t2(STScheduler);
-	thread t3(STScheduler);
-	thread t4(STScheduler);
-	thread t5(STScheduler);
-	thread t6(STScheduler);
-	thread t7(STScheduler);
-	thread t8(STScheduler);
-	thread t9(STScheduler);
-	thread t10(STScheduler);
-	thread t11(STScheduler);
-	thread t12(STScheduler);
-	thread t13(STScheduler);
-	thread t14(STScheduler);
-	thread t15(STScheduler);
-	thread t16(STScheduler);
-	thread t17(STScheduler);
-	thread t18(STScheduler);
-	thread t19(STScheduler);
-	thread t20(STScheduler);
-	t1.join();
-	t2.join();
-	t3.join();
-	t4.join();
-	t5.join();
-	t6.join();
-	t7.join();
-	t8.join();
-	t9.join();
-	t10.join();
-	t11.join();
-	t12.join();
-	t13.join();
-	t14.join();
-	t15.join();
-	t16.join();
-	t17.join();
-	t18.join();
-	t19.join();
-	t20.join();
+	vector <thread*> jobs;
+
+	for (int i = 0; i < 20; i++){
+		thread *task = new thread(Crawler);
+		jobs.push_back(task);
+	}
+
+	for (auto &task : jobs){
+		task->join();
+		delete task;
+	}
 
 	return 0;
 
