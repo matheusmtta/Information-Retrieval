@@ -15,8 +15,8 @@ class WebPage {
 		int level;
 		int id;
 
-		WebPage (string url, string domain, string title, int level, int id) : 
-			url(url), domain(domain), title(title), level(level), id(id) {
+		WebPage (string url, string domain, string title, int id) : 
+			url(url), domain(domain), title(title), id(id) {
 		}
 
 		void saveInfo(string &html);

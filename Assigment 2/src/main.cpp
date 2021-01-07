@@ -1,11 +1,7 @@
 #include <bits/stdc++.h>
+#include <CkSpider.h>
 #include "include/taskurl.h"
 #include "include/webpage.h"
-#include <CkSpider.h>
-#include <iostream>
-#include <chrono>
-#include <thread>
-#include <mutex>
 
 using namespace std;
 
@@ -18,14 +14,6 @@ map <string, int> domainTable;
 priority_queue <TaskUrl> longTermScheduler;	
 
 mutex stLock, countLock, dtLock, ltsLock,  crLock, writeLock;
-
-int getCount(){
-	countLock.lock();
-	int rsp = countSearched;
-	countLock.unlock();
-
-	return rsp;
-}
 
 bool crawlingFinished(){
 	countLock.lock();
@@ -43,46 +31,48 @@ bool isVisited(string url){
 	return found;
 }
 
-void addWebPage(string url, string domain, int level, CkSpider &spider){
+int addWebPage(string url, string domain, int id, CkSpider &spider){
 	string title = spider.lastHtmlTitle();
 	string html = spider.lastHtml();
+
+	int htmlSize = sizeof(char)*html.length();
 	
-	stLock.lock();
-	WebPage *nextWebPage = new WebPage(url, domain, title, level, searchedTable[url]);
-	stLock.unlock();
+	WebPage *nextWebPage = new WebPage(url, domain, title, id);
 
 	nextWebPage->report();
 	nextWebPage->saveInfo(html);
 
 	delete nextWebPage;
+
+	return htmlSize;
 }
 
-int addCrawledUrl(string &url, string &domain){
-	stLock.lock();
+int setVisited(string &url, string &domain){
 	countLock.lock();
-	dtLock.lock();
-
 	int id = countSearched++;
-	searchedTable[url] = countSearched;
-	domainTable[domain]++;
-
-	dtLock.unlock();
-	stLock.unlock();
 	countLock.unlock();
+
+	stLock.lock();
+	searchedTable[url] = id;
+	stLock.unlock();
+
+	dtLock.lock();
+	domainTable[domain]++;
+	dtLock.unlock();
 
 	return id;
 }
 
-bool updateLongTermScheduler(CkSpider &taskSpider, string &currTaskUrl, string &currTaskDomain){
+int updateLongTermScheduler(CkSpider &taskSpider, string &currTaskUrl, string &currTaskDomain){
 	if (isVisited(currTaskUrl))
-		return false;
+		return -1;
 
 	bool firstCrawl = taskSpider.CrawlNext();
 	if (!firstCrawl || crawlingFinished())
-		return false;
+		return -1;
 
-	addCrawledUrl(currTaskUrl, currTaskDomain);
-	addWebPage(currTaskUrl, currTaskDomain, 0, taskSpider);
+	int currTaskID = setVisited(currTaskUrl, currTaskDomain);
+	addWebPage(currTaskUrl, currTaskDomain, currTaskID, taskSpider);
 
 	int outBoundLinks = taskSpider.get_NumOutboundLinks();
 	for (int i = 0; i < outBoundLinks; i++){
@@ -108,12 +98,12 @@ bool updateLongTermScheduler(CkSpider &taskSpider, string &currTaskUrl, string &
 		TaskUrl newTaskUrl(nextSeedURL, nextSeedDomain, domainTable[nextSeedDomain]++);
 		longTermScheduler.push(newTaskUrl);
 	
-		ltsLock.unlock();
 		dtLock.unlock();
+		ltsLock.unlock();
 	}
 	taskSpider.SleepMs(100);
 
-	return true;
+	return currTaskID;
 }
 
 void Crawler(){
@@ -134,15 +124,15 @@ void Crawler(){
 			
 			startSearching = !longTermScheduler.empty();
 			if (startSearching){
-					TaskUrl currTask = longTermScheduler.top();
-					longTermScheduler.pop();
-					
-					currTaskUrl = currTask.url;
-					currTaskDomain = currTask.domain;
+				TaskUrl currTask = longTermScheduler.top();
+				longTermScheduler.pop();
+				
+				currTaskUrl = currTask.url;
+				currTaskDomain = currTask.domain;
 			}
-			else if (attempts == 0) return;
-			
 			ltsLock.unlock();
+			
+			if (attempts == 0) return;
 
 			if (!startSearching)
 				taskSpider.SleepMs(2000);
@@ -151,30 +141,29 @@ void Crawler(){
 		taskSpider.Initialize(currTaskDomain.c_str());
 		taskSpider.AddUnspidered(currTaskUrl.c_str());
 
-		string title;
+		int currTaskID = updateLongTermScheduler(taskSpider, currTaskUrl, currTaskDomain);
+ 		if (currTaskID != -1){
+			double currAvgCrawlingTime = 0, currAvgPageSize = 0;
 
-		bool runTask = updateLongTermScheduler(taskSpider, currTaskUrl, currTaskDomain);
- 		if (runTask){
-			double currAvgCrawlingTime = 0;
 			int inBoundLinks = taskSpider.get_NumUnspidered(), countInboundCrawled = 0;
 			for (int i = 0; i < inBoundLinks; i++){
 				if (crawlingFinished())
 					break;
 
-				string nextURL, nextDomain;
+				string nextUrl, nextDomain;
 				
 				try{
 					string failNextDomain(taskSpider.getUrlDomain(taskSpider.getUnspideredUrl(0)));
-					string failNextUrl(taskSpider.getUnspideredUrl(0));
+					string failnextUrl(taskSpider.getUnspideredUrl(0));
 				} catch (exception &e){
 					taskSpider.SkipUnspidered(0);
 					continue;
 				}
 
-				nextURL = taskSpider.getUnspideredUrl(0);
+				nextUrl = taskSpider.getUnspideredUrl(0);
 				nextDomain = taskSpider.getUrlDomain(taskSpider.getUnspideredUrl(0));
 
-				if (isVisited(nextURL)){
+				if (isVisited(nextUrl)){
 					taskSpider.SkipUnspidered(0);
 					//AddEdge
 				}
@@ -183,10 +172,12 @@ void Crawler(){
 					bool inBoundCrawling = taskSpider.CrawlNext();
 					auto finalExeTime = chrono::high_resolution_clock::now();
 					if (inBoundCrawling){
-						addCrawledUrl(nextURL, nextDomain);
-						addWebPage(nextURL, nextDomain, 1, taskSpider);
+						int nextUrlID = setVisited(nextUrl, nextDomain);
+						int nextUrlPageSize = addWebPage(nextUrl, nextDomain, nextUrlID, taskSpider);
 						
 						currAvgCrawlingTime += chrono::duration_cast<chrono::microseconds>(finalExeTime - initialExeTime).count();
+						currAvgPageSize += nextUrlPageSize;
+
 						countInboundCrawled++;
 					}
 					taskSpider.SleepMs(100);
@@ -194,22 +185,19 @@ void Crawler(){
 			}
 
 			currAvgCrawlingTime = countInboundCrawled > 0 ? (currAvgCrawlingTime*1e-6)/(countInboundCrawled*1.0) : 0;
-			
-			stLock.lock();
-			int currTaskID = searchedTable[currTaskUrl];
-			stLock.unlock();
+			currAvgPageSize = currAvgPageSize > 0 ? currAvgPageSize/(countInboundCrawled*1.0) : 0;
 
 			writeLock.lock();
+			TaskUrl *currLevelZeroTask = new TaskUrl(currTaskID, currTaskUrl, currTaskDomain,
+										             countInboundCrawled, currAvgPageSize, currAvgCrawlingTime);
+			currLevelZeroTask->report();
 
-			saveInfo(currTaskUrl, countInboundCrawled, currAvgCrawlingTime, currTaskID);
+			delete currLevelZeroTask;
+
 			countLevelZero += 1;
 			countLevelOne += countInboundCrawled;
-			
-			writeLock.unlock();
 
-			dtLock.lock();
-			domainTable[currTaskDomain] += countInboundCrawled;
-			dtLock.unlock();
+			writeLock.unlock();
 
 			if (crawlingFinished())
 				break;
