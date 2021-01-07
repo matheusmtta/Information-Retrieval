@@ -11,23 +11,20 @@ class TaskUrl {
 		string domain;
 
 		int id;
-		//int parentID
 		int urlWgt;
 		int domainWgt; 
 
-		TaskUrl (string url, string domain, int domainWgt) : url(url), domain(domain), domainWgt(domainWgt) {
-			getUrlWeight();
-		}
+		int numCrawledPages;
+		double avgCrawlingTime;
 
-		int getUrlWeight(){
-			int weight = 0;
+		TaskUrl (string url, string domain, int domainWgt) : url(url), domain(domain), domainWgt(domainWgt) {
 			for (char ch : url)
 				if (ch == '.' || ch == '/')
-					weight += 1;
-			return weight;
+					this->urlWgt += 1;
 		}
 };
 
 bool operator<(const TaskUrl &lhs, const TaskUrl &rhs);
+void saveInfo(string url, int crawledPages, double AvgCrawlingTime, int id);
 
 #endif

@@ -18,3 +18,6 @@ $(BIN)/webpage.o: webpage.cpp
 run:
 	export LD_LIBRARY_PATH=$(CHILKAT)/lib:$$LD_LIBRARY_PATH; \
 	./main
+
+clean:
+	rm -rf webpage.o taskurl.o main
