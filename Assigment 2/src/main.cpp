@@ -5,41 +5,81 @@
 
 using namespace std;
 
-const int MAX = 10000;
-static int countSearched = 0, countLevelZero = 0, countLevelOne = 0;
+const int MAX = 100000;
+static int searchId = 0, countLevelZero = 0, countLevelOne = 0;
+static double totalLevelOnePageSize = 0;
 
+auto initialExeTime = chrono::high_resolution_clock::now();
+
+set <string> visitedPages;
 map <string, int> searchedTable;
 map <string, int> domainTable;
+map <string, bool> crawlingDomain;
 
 priority_queue <TaskUrl> longTermScheduler;	
 
-mutex stLock, countLock, dtLock, ltsLock,  crLock, writeLock;
+mutex searchTableLock, searchIdLock, domainTableLock, longTermSchedulerLock, writeLock, crawlingDomainLock, visitedPagesLock, levelCountLock;
 
-bool crawlingFinished(){
-	countLock.lock();
-	int currCount = countSearched;
-	countLock.unlock();
+int crawlingFinished(){
+	searchIdLock.lock();
+	bool finished = searchId >= MAX;
+	searchIdLock.unlock();
 
-	return currCount >= MAX;
+	return finished;
 }
 
-bool isVisited(string url){
-	stLock.lock();
-	bool found = searchedTable.find(url) != searchedTable.end();
-	stLock.unlock();
+int toCrawl(string url, CkSpider &spider, int level){
+	visitedPagesLock.lock();
 
-	return found;
+	if(!visitedPages.count(url)){
+		visitedPages.insert(url);
+		visitedPagesLock.unlock();
+
+		bool successfullyCrawled = spider.CrawlNext();
+		spider.SleepMs(100);
+
+		if (successfullyCrawled){
+			levelCountLock.lock();
+			searchTableLock.lock();
+			searchIdLock.lock();
+			
+			level == 0 ? countLevelZero++ : countLevelOne++;
+
+			int goId = searchId++;
+			searchedTable[url] = goId;
+			
+			if (goId == 1000 || (goId >= 10000 && goId%10000 == 0)){
+				auto finalExeTime = chrono::high_resolution_clock::now();
+				double totalExeTime = chrono::duration_cast<chrono::microseconds>(finalExeTime - initialExeTime).count()*1e-6;
+
+				string path = "exetime.txt";
+
+				ofstream outfile;
+				outfile.open(path, std::ios_base::app);
+				outfile << goId << ' ' << totalExeTime/60 << ' ' << totalLevelOnePageSize*1e-9 << countLevelZero << " " << countLevelOne << endl;
+			}
+
+			levelCountLock.unlock();
+			searchIdLock.unlock();
+			searchTableLock.unlock();
+			
+			return goId;
+		} 
+		else return -2;
+	} 
+	
+	visitedPagesLock.unlock();
+	return -1;
 }
 
-int addWebPage(string url, string domain, int id, CkSpider &spider){
+int addWebPage(string url, string domain, int id, CkSpider &spider, double crawlingTime){
 	string title = spider.lastHtmlTitle();
 	string html = spider.lastHtml();
 
 	int htmlSize = sizeof(char)*html.length();
 	
-	WebPage *nextWebPage = new WebPage(url, domain, title, id);
+	WebPage *nextWebPage = new WebPage(url, domain, title, id, crawlingTime, htmlSize);
 
-	nextWebPage->report();
 	nextWebPage->saveInfo(html);
 
 	delete nextWebPage;
@@ -47,32 +87,19 @@ int addWebPage(string url, string domain, int id, CkSpider &spider){
 	return htmlSize;
 }
 
-int setVisited(string &url, string &domain){
-	countLock.lock();
-	int id = countSearched++;
-	countLock.unlock();
-
-	stLock.lock();
-	searchedTable[url] = id;
-	stLock.unlock();
-
-	dtLock.lock();
-	domainTable[domain]++;
-	dtLock.unlock();
-
-	return id;
-}
-
 int updateLongTermScheduler(CkSpider &taskSpider, string &currTaskUrl, string &currTaskDomain){
-	if (isVisited(currTaskUrl))
+	auto initialCurrCrawExeTime = chrono::high_resolution_clock::now();
+	int currTaskID = toCrawl(currTaskUrl, taskSpider, 0);
+	auto finalCurrCrawExeTime = chrono::high_resolution_clock::now();
+
+	if (currTaskID == -1 || currTaskID == -2) 
 		return -1;
 
-	bool firstCrawl = taskSpider.CrawlNext();
-	if (!firstCrawl || crawlingFinished())
-		return -1;
+	double crawlingTime = chrono::duration_cast<chrono::microseconds>(finalCurrCrawExeTime - initialCurrCrawExeTime).count();
+	addWebPage(currTaskUrl, currTaskDomain, currTaskID, taskSpider, crawlingTime);
 
-	int currTaskID = setVisited(currTaskUrl, currTaskDomain);
-	addWebPage(currTaskUrl, currTaskDomain, currTaskID, taskSpider);
+	if (crawlingFinished())
+		return -1;
 
 	int outBoundLinks = taskSpider.get_NumOutboundLinks();
 	for (int i = 0; i < outBoundLinks; i++){
@@ -89,17 +116,18 @@ int updateLongTermScheduler(CkSpider &taskSpider, string &currTaskUrl, string &c
 		nextSeedURL = taskSpider.getOutboundLink(i);
 		nextSeedDomain = taskSpider.getUrlDomain(taskSpider.getOutboundLink(i));
 
-		if (isVisited(nextSeedURL))
-			continue;
+		crawlingDomainLock.lock();
+		crawlingDomain[currTaskDomain] = false;
+		crawlingDomainLock.unlock();
 
-		ltsLock.lock();
-		dtLock.lock();
+		longTermSchedulerLock.lock();
+		domainTableLock.lock();
 		
 		TaskUrl newTaskUrl(nextSeedURL, nextSeedDomain, domainTable[nextSeedDomain]++);
 		longTermScheduler.push(newTaskUrl);
 	
-		dtLock.unlock();
-		ltsLock.unlock();
+		domainTableLock.unlock();
+		longTermSchedulerLock.unlock();
 	}
 	taskSpider.SleepMs(100);
 
@@ -111,30 +139,51 @@ void Crawler(){
 		CkSpider taskSpider;
 		string currTaskUrl, currTaskDomain;
 
+		taskSpider.put_Utf8(true);
+
 		taskSpider.AddAvoidOutboundLinkPattern("*facebook.com*");
+		taskSpider.AddAvoidOutboundLinkPattern("*instagram.com*");
 		taskSpider.AddAvoidOutboundLinkPattern("*twitter.com*");
+		taskSpider.AddAvoidOutboundLinkPattern("*amazon.com*");
 
 		int attempts = 50;
-		bool startSearching = false;
-		while (!startSearching && attempts--){
+		bool startSearching = false, domainAvailable = false;
+		while (!startSearching && !domainAvailable && attempts--){
 			if (crawlingFinished())
 				return;
 
-			ltsLock.lock();
-			
+			longTermSchedulerLock.lock();
 			startSearching = !longTermScheduler.empty();
 			if (startSearching){
-				TaskUrl currTask = longTermScheduler.top();
-				longTermScheduler.pop();
-				
-				currTaskUrl = currTask.url;
-				currTaskDomain = currTask.domain;
+				stack <TaskUrl> unavailableTasks;
+				while (!longTermScheduler.empty() && !domainAvailable){
+					TaskUrl currTask = longTermScheduler.top();
+					longTermScheduler.pop();
+					
+					currTaskUrl = currTask.url;
+					currTaskDomain = currTask.domain;
+
+					crawlingDomainLock.lock();
+					if (crawlingDomain[currTaskDomain] == false){
+						domainAvailable = true;
+						crawlingDomain[currTaskDomain] = true;
+					}
+					else unavailableTasks.push(currTask);
+
+					crawlingDomainLock.unlock();
+				}
+
+				while (!unavailableTasks.empty()){
+					TaskUrl tmp = unavailableTasks.top();
+					unavailableTasks.pop();
+					longTermScheduler.push(tmp);
+				}
 			}
-			ltsLock.unlock();
+			longTermSchedulerLock.unlock();
 			
 			if (attempts == 0) return;
 
-			if (!startSearching)
+			if (!startSearching || !domainAvailable)
 				taskSpider.SleepMs(2000);
 		}
 
@@ -147,9 +196,6 @@ void Crawler(){
 
 			int inBoundLinks = taskSpider.get_NumUnspidered(), countInboundCrawled = 0;
 			for (int i = 0; i < inBoundLinks; i++){
-				if (crawlingFinished())
-					break;
-
 				string nextUrl, nextDomain;
 				
 				try{
@@ -163,50 +209,52 @@ void Crawler(){
 				nextUrl = taskSpider.getUnspideredUrl(0);
 				nextDomain = taskSpider.getUrlDomain(taskSpider.getUnspideredUrl(0));
 
-				if (isVisited(nextUrl)){
+				auto initialCurrCrawExeTime = chrono::high_resolution_clock::now();
+				int nextUrlID = toCrawl(nextUrl, taskSpider, 1);
+				auto finalCurrCrawExeTime = chrono::high_resolution_clock::now();
+				
+				if (nextUrlID == -1){
 					taskSpider.SkipUnspidered(0);
-					//AddEdge
 				}
-				else{
-					auto initialExeTime = chrono::high_resolution_clock::now();
-					bool inBoundCrawling = taskSpider.CrawlNext();
-					auto finalExeTime = chrono::high_resolution_clock::now();
-					if (inBoundCrawling){
-						int nextUrlID = setVisited(nextUrl, nextDomain);
-						int nextUrlPageSize = addWebPage(nextUrl, nextDomain, nextUrlID, taskSpider);
-						
-						currAvgCrawlingTime += chrono::duration_cast<chrono::microseconds>(finalExeTime - initialExeTime).count();
-						currAvgPageSize += nextUrlPageSize;
+				else if (nextUrlID != -2){
+					double crawlingTime = chrono::duration_cast<chrono::microseconds>(finalCurrCrawExeTime - initialCurrCrawExeTime).count();
+					
+					int nextUrlPageSize = addWebPage(nextUrl, nextDomain, nextUrlID, taskSpider, crawlingTime);
+					
+					currAvgCrawlingTime += chrono::duration_cast<chrono::microseconds>(finalCurrCrawExeTime - initialCurrCrawExeTime).count();
+					currAvgPageSize += nextUrlPageSize;
 
-						countInboundCrawled++;
-					}
-					taskSpider.SleepMs(100);
+					countInboundCrawled++;
 				}
+
+				if (crawlingFinished())
+					break;
 			}
+
+			crawlingDomainLock.lock();
+			crawlingDomain[currTaskDomain] = false;
+			crawlingDomainLock.unlock();
+
+			writeLock.lock();
+
+			totalLevelOnePageSize += currAvgPageSize;
 
 			currAvgCrawlingTime = countInboundCrawled > 0 ? (currAvgCrawlingTime*1e-6)/(countInboundCrawled*1.0) : 0;
 			currAvgPageSize = currAvgPageSize > 0 ? currAvgPageSize/(countInboundCrawled*1.0) : 0;
 
-			writeLock.lock();
 			TaskUrl *currLevelZeroTask = new TaskUrl(currTaskID, currTaskUrl, currTaskDomain,
 										             countInboundCrawled, currAvgPageSize, currAvgCrawlingTime);
 			currLevelZeroTask->report();
 
 			delete currLevelZeroTask;
 
-			countLevelZero += 1;
-			countLevelOne += countInboundCrawled;
-
 			writeLock.unlock();
-
-			if (crawlingFinished())
-				break;
 		}
 	}
 }
 
 int main(){
-	const int numSeeds = 5;
+	const int numSeeds = 3;
 
 	for (int i = 0; i < numSeeds; i++){
 		CkSpider auxSpider;
@@ -214,6 +262,8 @@ int main(){
 
 		string seedUrl = str.c_str();
 		string seedDomain = auxSpider.getUrlDomain(seedUrl.c_str()); 
+
+		crawlingDomain[seedDomain] = false;
 
 		TaskUrl newTaskUrl(seedUrl, seedDomain, domainTable[seedDomain]++);
 		longTermScheduler.push(newTaskUrl);
@@ -231,14 +281,7 @@ int main(){
 		delete task;
 	}
 
-	bool success = countLevelZero+countLevelOne == countSearched;
-	cout << "Count results: " << countLevelZero+countLevelOne << "/" << countSearched;
-	cout << ((success) ? "   SUCCESS!" : "   FAILED!") << endl;
-	if (success){
-		cout << "Pages crawled (level 0): " << countLevelZero << endl;
-		cout << "Pages crawled (level 1): " << countLevelOne << endl;
-	}
-	else cout << "GO FIX YOUR CODE DUMB ASS" << endl;
+	cout << countLevelZero << " " << countLevelOne << " " << countLevelOne+countLevelZero << "/" << searchId << endl;
 
 	return 0;
 

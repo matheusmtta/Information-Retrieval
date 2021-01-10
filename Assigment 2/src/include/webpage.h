@@ -15,12 +15,14 @@ class WebPage {
 		int level;
 		int id;
 
-		WebPage (string url, string domain, string title, int id) : 
-			url(url), domain(domain), title(title), id(id) {
+		double crawlingTime;
+		double pageSize;
+
+		WebPage (string url, string domain, string title, int id, double crawlingTime, double pageSize) : 
+			url(url), domain(domain), title(title), id(id), crawlingTime(crawlingTime), pageSize(pageSize*0.001) {
 		}
 
 		void saveInfo(string &html);
-		void report();
 };
 
 #endif

@@ -1,33 +1,26 @@
 #include "include/taskurl.h"
 
 bool operator<(const TaskUrl &lhs, const TaskUrl &rhs){
-	if (rhs.urlWgt != lhs.urlWgt) return rhs.urlWgt < lhs.urlWgt;
-	return rhs.domainWgt < lhs.domainWgt;
+	if (rhs.urlWgt != lhs.urlWgt) return rhs.urlWgt - (rhs.brDomain == true) > lhs.urlWgt - (lhs.brDomain == true);
+	return rhs.domainWgt > lhs.domainWgt;
 }
 
 void TaskUrl::report(){
-	string path = "tasksInfo.txt";
+	string path = "tasksInfo.csv";
 
 	fstream checkExistance;
 	checkExistance.open(path);
 	
 	ofstream outfile;
-	if (checkExistance.fail())
+	if (checkExistance.fail()){
 		outfile.open(path);
+ 		outfile << "id,numcrawled,avgCrawlingTime,avgPageSize" << endl;
+ 	}
 	else
 	   	outfile.open(path, std::ios_base::app);
 
-   	string dataID = "URL ID: ";
-   	string dataURL = "URL: '" + url + "'";
-   	string dataNum = "Level 1 pages crawled: ";
-   	string dataTime = "Average crawling time ";
-   	string dataSize = "Average pages size ";
-   	
-   	outfile << dataID << id << endl;
-   	outfile << dataURL << endl;
-   	outfile << dataNum << numCrawledPages << endl;
-   	outfile << dataTime << avgCrawlingTime << " seconds." << endl;
-   	outfile << dataSize << avgPageSize << " kilobytes." << endl << endl;
-	
+ 
+ 	outfile << this->id << "," << this->numCrawledPages << "," << this->avgCrawlingTime << "," << this->avgPageSize << endl;  	
+
 	outfile.close();
 }

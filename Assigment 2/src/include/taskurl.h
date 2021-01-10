@@ -10,6 +10,8 @@ class TaskUrl {
 		string url;
 		string domain;
 
+		bool brDomain = false;
+
 		int id;
 		int urlWgt;
 		int domainWgt; 
@@ -25,11 +27,9 @@ class TaskUrl {
 
 			for (int i = 0; i < (int)url.size()-2; i++){
 				if (url[i] == '.' && url[i+1] == 'b' && url[i+2] == 'r'){
-					this->urlWgt -= 2;
+					brDomain = true;
 					break;
 				}
-				if (url[i] == '/')
-					break;
 			}
 		}
 
@@ -39,7 +39,7 @@ class TaskUrl {
 			this->url = url; 
 			this->domain = domain;
 			this->numCrawledPages = numCrawledPages;
-			this->avgPageSize = avgPageSize*0.000125; //bits to kilobytes
+			this->avgPageSize = avgPageSize*0.001; //bytes to kilobytes
 			this->avgCrawlingTime = avgCrawlingTime;
 		}
 
