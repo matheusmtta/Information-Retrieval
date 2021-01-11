@@ -5,11 +5,15 @@
 
 using namespace std;
 
+//The priority queue, long-term scheduler will run with
+//objects from this class, which will hold all relevant information
+//about a URL that has not been crawled yet
 class TaskUrl {
 	public:
 		string url;
 		string domain;
 
+		//check if it is a potential brazilian url
 		bool brDomain = false;
 
 		int id;
@@ -20,30 +24,15 @@ class TaskUrl {
 		double avgCrawlingTime;
 		double avgPageSize;
 
+
 		TaskUrl (string url, string domain, int domainWgt) : url(url), domain(domain), domainWgt(domainWgt) {
-			for (char ch : url)
-				if (ch == '.' || ch == '/')
-					this->urlWgt += 1;
-
-			for (int i = 0; i < (int)url.size()-2; i++){
-				if (url[i] == '.' && url[i+1] == 'b' && url[i+2] == 'r'){
-					brDomain = true;
-					break;
-				}
-			}
+			this->urlWgt = getWeight();
 		}
 
-		TaskUrl(int id, string url, string domain,
-				int numCrawledPages, double avgPageSize, double avgCrawlingTime) {
-			this->id = id;
-			this->url = url; 
-			this->domain = domain;
-			this->numCrawledPages = numCrawledPages;
-			this->avgPageSize = avgPageSize*0.001; //bytes to kilobytes
-			this->avgCrawlingTime = avgCrawlingTime;
-		}
+		TaskUrl(int id, string url, string domain, int numCrawledPages, double avgPageSize, double avgCrawlingTime);
 
 		void report();
+		double getWeight();
 };
 
 bool operator<(const TaskUrl &lhs, const TaskUrl &rhs);
