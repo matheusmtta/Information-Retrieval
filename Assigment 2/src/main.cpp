@@ -7,7 +7,7 @@ using namespace std;
 
 //Define global static and constant variables, which will be use
 //as counters and to limit the program execution loop to 100000 pages
-const int MAX = 100000;
+const int MAX = 1000;
 static int searchId = 0, countLevelZero = 0, countLevelOne = 0;
 
 //Set time when the algorithm started
@@ -358,6 +358,10 @@ int main(){
 		task->join();
 		delete task;
 	}
+
+	cout << "Total number of successfully crawled pages: " << countLevelOne+countLevelZero << endl;
+	cout << "Total number of level 0 pages: " << countLevelZero << endl;
+	cout << "Total number of level 1 pages: " << countLevelOne << endl;
 
 	return 0;
 
