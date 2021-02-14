@@ -21,26 +21,43 @@ int main() {
     //Initialize the hash map that will maintain information
     //about the id of each occurring term
     unordered_map <string, int> wordHashKey;
-    string pathTermsID = "files/terms_id.txt";
+    string pathTermsID = "output/vocabulary_id.txt";
     ofstream outhashfile(pathTermsID.c_str());
 
     //Set the number of HTML documents that will be indexed
     //per inverted list file and total number of HTML documents
-    int maxDocumentsPerFile = 10;
+    int maxDocumentsPerFile = 2;
     int currDocument = 0;
 
-    //For each inverted list document
+    //Create 64 initial sorted files whre each of them will
+    //have an inverted list constructed wih maxDocumentsPerFile HTML
+    //documents
+    bool finish = false;
     for (int doc = 0; doc < 64; doc++){
-        vector <termContainer> tupleTerm;
+        //Create a empty inverted list where each position is
+        //a term container, i.e, a tuple with the term and its
+        //respective document and position
+        vector <termContainer> invertedlist;
 
         for (int i = 0; i < maxDocumentsPerFile; i++){
-            getline(infile, currLine);
+            //For each document in each main file we will
+            //parse the json information from the collection
+            //and parse the html content and get the clean text
+            if (!getline(infile, currLine)){
+                finish = true;
+                break;
+            }
             rapidjson::Document lineDocument;
             lineDocument.Parse<0>(currLine.c_str());
 
             string html = lineDocument["html_content"].GetString();
             string cleanText = parser.getCleanText(html) + " ";
 
+            //Iterate through the clean text searching for separator caracters
+            //and extracting each individual term and adding those which hasn't
+            //had appeared so far to the word hash, which will associate an id to
+            //it. Furthermore, adding each individual term and its respective document
+            //and postion to the inverted list
             int textSize = cleanText.size(), pos = 0;
             for (int j = 0; j < textSize; j++){
                 string currTerm;
@@ -54,8 +71,8 @@ int main() {
 
                             int id = wordHashKey[currTerm]; 
 
-                            termContainer tmpTermContainer(currTerm, currDocument, pos);
-                            tupleTerm.push_back(tmpTermContainer);
+                            termContainer tmpTermContainer(id, currDocument, pos);
+                            invertedlist.push_back(tmpTermContainer);
 
                             pos++;
                         }
@@ -67,75 +84,29 @@ int main() {
             }
             currDocument++;
         }
+        if (finish)
+            break;
 
-        cout << tupleTerm.size() << endl;
-        sort(tupleTerm.begin(), tupleTerm.end(), comp);
+        //Sort the inverted list on the main memory with relation to the id
+        //document and position respectively 
+        sort(invertedlist.begin(), invertedlist.end(), comp);
 
+        //Write on file the sorted inverted list
         string outputPath = "output/invertedList_6_" + to_string(doc) + ".txt";
         ofstream outlistfile(outputPath.c_str());
 
-        for (termContainer tuple : tupleTerm)
-            outlistfile << tuple.word << ' ' << tuple.doc << ' ' << tuple.pos << '\n';        
+        for (termContainer tuple : invertedlist)
+            outlistfile << tuple.id << ' ' << tuple.doc << ' ' << tuple.pos << '\n';        
     }
     infile.close();
     outhashfile.close();
 
-    for (int it = 6; it > 0; it--){
-        for (int j = 0, doc = 0; j < (1 << it); j += 2, doc++){
-            string pathfileA = "output/invertedList_" + to_string(it) + "_" + to_string(j) + ".txt";
-            string pathfileB = "output/invertedList_" + to_string(it) + "_" + to_string(j+1) + ".txt";
-            ifstream infileA(pathfileA.c_str());
-            ifstream infileB(pathfileB.c_str());
-
-            string pathfileMerge = "output/invertedList_" + to_string(it-1) + "_" + to_string(doc) + ".txt";
-            ofstream outfileMerge(pathfileMerge.c_str());
-
-            string lineContentA, lineContentB;
-
-            getline(infileA, lineContentA);
-            getline(infileB, lineContentB);
-
-            termContainer lhsTerm = getContainer(lineContentA);
-            termContainer rhsTerm = getContainer(lineContentB);
-
-            bool goNextA = true, goNextB = true;
-            while (goNextA || goNextB){
-                if (comp(lhsTerm, rhsTerm)){
-                    outfileMerge << lineContentA << "\n";
-                    goNextB =  false, goNextA = true;
-                }
-                else{
-                    outfileMerge << lineContentB << "\n";
-                    goNextB = true, goNextA = false;
-                }
-                if (goNextA == true){
-                    if (getline(infileA, lineContentA)){
-                        lhsTerm = getContainer(lineContentA);
-                    }
-                    else {
-                        outfileMerge << lineContentB << "\n";
-                        while (getline(infileB, lineContentB))
-                            outfileMerge << lineContentB << "\n";
-                        goNextA = goNextB = false;
-                    }
-                }
-                if (goNextB == true){
-                    if (getline(infileB, lineContentB)){
-                        rhsTerm = getContainer(lineContentB);
-                    }
-                    else {
-                        outfileMerge << lineContentA << "\n";
-                        while (getline(infileA, lineContentA))
-                            outfileMerge << lineContentA << "\n";
-                        goNextA = goNextB = false;
-                    }
-                }
-            }
-            infileA.close(); infileB.close(); outfileMerge.close();
-            remove(pathfileA.c_str());
-            remove(pathfileB.c_str());
-        }
-    }
+    //Merge the 64 sorted inverted lists into a unique also sorted list,
+    //and create a dictionary to store the information about the occurrences
+    //of each term on the final inverted list created, to get more efficient
+    //access to the information of each term
+    mergeInvertedLists();
+    buildDictionary();
 
     return 0;
 }
