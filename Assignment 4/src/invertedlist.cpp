@@ -2,41 +2,122 @@
 
 using namespace std;
 
-bool comp(const termContainer &lhs, const termContainer &rhs){
-	if (lhs.id == rhs.id and lhs.doc == rhs.doc)
-		return lhs.pos < rhs.pos;
-	if (lhs.id == rhs.id)
-		return lhs.doc < rhs.doc;
-	return lhs.id < rhs.id;
-}
+void buildInvertedLists(){
+    //Initialize HTML parser and define the access path
+    //to the HTML collection
+    Parser parser;
+    string pathCollection = "files/collection.jl";
 
-termContainer getContainer(string strTuple){
-	int id;
-	int doc, pos;
+    //Get access to the HTML collection
+    ifstream infile(pathCollection);
+    string currLine;
 
-	int len = strTuple.size();
-	string tmp;
+    //Initialize the file hash map that will maintain information
+    //about the id of each occurring term and its respective frequency
+    //in the collection (n_i)
+    vector <string> vocabulary;
+    unordered_map <string, int> termHashKey;
+    unordered_map <string, pair<int, int>> termFrequency;
+    
+    //Get the output path files to the vocabulary ids and url ids,
+    string pathTermsID = "output/vocabularyIdList.txt";
+    ofstream outvocabularyfile(pathTermsID.c_str());
 
-	int i = 0;
-	while (i < len && strTuple[i] != ' ') 
-		tmp += strTuple[i++];
-	id = stoi(tmp);
-	tmp.clear();
+    string pathUrlsID = "output/urlIdList.txt";
+    ofstream outurllistfile(pathUrlsID.c_str());
 
-	i++;
-	while (i < len && strTuple[i] != ' ') 
-		tmp += strTuple[i++];
-	doc = stoi(tmp);
-	tmp.clear();
+    //Set the number of HTML documents that will be indexed
+    //per inverted list file and total number of HTML documents
+    int maxDocumentsPerFile = 2;
+    int currDocument = 0;
 
-	i++;
-	while (i < len) 
-		tmp += strTuple[i++];
-	pos = stoi(tmp);
-	
-	termContainer currContainer(id, doc, pos);
+    //Create 64 initial sorted files whre each of them will
+    //have an inverted list constructed wih maxDocumentsPerFile HTML
+    //documents
+    bool finish = false;
+    for (int doc = 0; doc < 64; doc++){
+        //Create a empty inverted list where each position is
+        //a term container, i.e, a tuple with the term and its
+        //respective document and position
+        vector <termContainer> invertedlist;
 
-	return currContainer;
+        for (int i = 0; i < maxDocumentsPerFile; i++){
+            //For each document in each main file we will
+            //parse the json information from the collection
+            //and parse the html content and get the clean text
+            if (!getline(infile, currLine)){
+                finish = true;
+                break;
+            }
+            rapidjson::Document lineDocument;
+            lineDocument.Parse<0>(currLine.c_str());
+
+            string html = lineDocument["html_content"].GetString();
+            string url = lineDocument["url"].GetString();
+            string cleanText = parser.getCleanText(html) + " ";
+
+            outurllistfile << currDocument << ' ' << url << '\n';
+
+            //Iterate through the clean text searching for separator caracters
+            //and extracting each individual term and adding those which hasn't
+            //had appeared so far to the word hash, which will associate an id to
+            //it. Furthermore, adding each individual term and its respective document
+            //and postion to the inverted list
+            int textSize = cleanText.size(), pos = 0;
+            for (int j = 0; j < textSize; j++){
+                string currTerm;
+                for (int k = j; k < textSize; k++){
+                    if (cleanText[k] == ' '){
+                        if (!currTerm.empty()){
+                            if (!termHashKey.count(currTerm)){
+                                termHashKey[currTerm] = (int)termHashKey.size();
+                                vocabulary.push_back(currTerm);
+
+                                termFrequency[currTerm].first = 1;
+                                termFrequency[currTerm].second = currDocument;
+                            }
+                            if (termFrequency[currTerm].second != currDocument){
+                                termFrequency[currTerm].first += 1;
+                                termFrequency[currTerm].second = currDocument;
+                            }
+
+                            int id = termHashKey[currTerm]; 
+
+
+                            termContainer tmpTermContainer(id, currDocument, pos);
+                            invertedlist.push_back(tmpTermContainer);
+
+                            pos++;
+                        }
+                        j = k;
+                        break;
+                    }
+                    currTerm += cleanText[k];
+                }
+            }
+            currDocument++;
+        }
+        if (finish)
+            break;
+
+        //Sort the inverted list on the main memory with relation to the id
+        //document and position respectively 
+        sort(invertedlist.begin(), invertedlist.end(), comp);
+
+        //Write on file the sorted inverted list
+        string outputPath = "output/invertedList_6_" + to_string(doc) + ".txt";
+        ofstream outlistfile(outputPath.c_str());
+
+        for (termContainer tuple : invertedlist)
+            outlistfile << tuple.id << ' ' << tuple.doc << ' ' << tuple.pos << '\n';        
+    }
+
+    for (string term : vocabulary)
+        outvocabularyfile << term << ' ' << termHashKey[term] << ' ' << termFrequency[term].first << '\n';
+
+    infile.close();
+    outvocabularyfile.close();
+    outurllistfile.close();
 }
 
 void mergeInvertedLists(){
@@ -101,48 +182,4 @@ void mergeInvertedLists(){
             remove(pathfileB.c_str());
         }
     }
-}
-
-void buildDictionary(){
-	string pathInvertedIndex = "output/invertedList.txt";
-    ifstream infileInvertedIndex(pathInvertedIndex);
-
-    string pathDictionary = "output/dictionary.txt";
-    ofstream outfileDict(pathDictionary.c_str());
-
-    string currTuple;
-    getline(infileInvertedIndex, currTuple);
-
-    int idx = 0; string tmp;
-    while (currTuple[idx] != ' ') 
-        tmp += currTuple[idx++];
-    int currTupleId = stoi(tmp);
-
-    int lastTupleId = currTupleId;
-    int left = 0, right = 0, flag = false;
-    while (true){
-        if (!getline(infileInvertedIndex, currTuple)){
-            if (!flag)
-                outfileDict << lastTupleId << ' ' << left << ' ' << right-1 << '\n';
-            break;
-        }
-
-        idx = 0; tmp.clear();
-        while (currTuple[idx] != ' ') 
-            tmp += currTuple[idx++];
-        currTupleId = stoi(tmp);
-
-        if (currTupleId != lastTupleId) {
-            outfileDict << lastTupleId << ' ' << left << ' ' << right << '\n';
-            left = right+1;
-            flag = true;
-        }
-        else flag = false;
-
-        lastTupleId = currTupleId;
-        right++;
-    }
-
-    outfileDict.close();
-    infileInvertedIndex.close();
 }
