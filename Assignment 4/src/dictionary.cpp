@@ -1,8 +1,16 @@
 #include "includes/dictionary.h"
 
+void checkFile(ifstream &file, string path){
+    if (file.fail()){
+        cout << "Path to file '" << path << "' not found." << endl;
+        exit(0);
+    }
+}
+
 void buildInFileDictionary(){
 	string pathInvertedList = "output/invertedList.txt";
     ifstream infileInvertedList(pathInvertedList, std::ifstream::binary);
+    checkFile(infileInvertedList, pathInvertedList);
 
     string pathDictionary = "output/dictionary.txt";
     ofstream outfileDict(pathDictionary.c_str());
@@ -18,6 +26,7 @@ void buildInFileDictionary(){
     long long lastTupleId = currTupleId;
     long long lastLine = 0, currLine = 0;
 
+    cout << "Building dictionary on file..." << endl;
     while (true){
         if (!getline(infileInvertedList, currTuple)){
             outfileDict << lastTupleId << ' ' << lastLine << ' ' << currLine << '\n';
@@ -37,7 +46,7 @@ void buildInFileDictionary(){
         lastTupleId = currTupleId;
         currLine = infileInvertedList.tellg();
     }
-
+    cout << "Dictionary saved at 'output/dictionary.txt'." << endl;
     outfileDict.close();
     infileInvertedList.close();
 }
@@ -54,13 +63,19 @@ string getNextSlice(int &idx, string str){
 }
 
 Dictionary::Dictionary(){
+    cout << "Loading files..." << endl;
     string pathDictionary = "output/dictionary.txt";
     string pathVocabulary = "output/vocabularyIdList.txt";
     string pathURLsIndex = "output/urlIdList.txt";
 
     ifstream infileDictionary(pathDictionary);
+    checkFile(infileDictionary, pathDictionary);
+
     ifstream infileVocabulary(pathVocabulary);
+    checkFile(infileVocabulary, pathVocabulary);
+    
     ifstream infilePathUrlInd(pathURLsIndex);
+    checkFile(infilePathUrlInd, pathURLsIndex);
 
     string currVocabLine;
     while (getline(infileVocabulary, currVocabLine)){
@@ -93,32 +108,36 @@ Dictionary::Dictionary(){
         long long init = stoll(getNextSlice(idx, currInfileDictLine));
         long long end = stoll(getNextSlice(idx, currInfileDictLine));
         int n_i = termFrequency[id];
-        double idf = log2((int)decompressUrl.size()/n_i);
+        double idf = log2((double)decompressUrl.size()/(double)n_i);
 
         dictContainer currDictLine(init, end, n_i, idf);
 
         termDictLine[id] = (int)dictionary.size();
         dictionary.push_back(currDictLine);
     }
+    cout << "Files successfully loaded on main memory." << endl;
 }
 
-void Dictionary::query(string term, bool showUrls){
+void Dictionary::query(string term){
+    cout << "Searching for '" << term << "' in the collection inverted list..." << endl << endl; 
     if (compressTerm.find(term) == compressTerm.end()){
-        cout << "There are no matching documents for this term in the collection" << endl;
+        cout << "There are no matching documents for this term in the collection." << endl;
         return;
     }
 
-    int id = compressTerm[term], dictionaryIdx = termDictLine[id];
+    int id = compressTerm[term], dictionaryIdx = termDictLine[id], countDoc = 0, countTerm = 0;
     long long init = dictionary[dictionaryIdx].init;
     long long end = dictionary[dictionaryIdx].end;
     
     string pathInvertedList = "output/invertedList.txt";
     ifstream infileInvertedList(pathInvertedList, ifstream::binary);
+    checkFile(infileInvertedList, pathInvertedList);
 
     infileInvertedList.seekg(init, ios::beg);
     
     set <int> documents;
 
+    cout << "OCCURRENCES (INVERTED LIST): " << endl;
     string currInvertedListLine;
     while (getline(infileInvertedList, currInvertedListLine) && infileInvertedList.tellg() <= end){
         int idx = 0;
@@ -126,9 +145,21 @@ void Dictionary::query(string term, bool showUrls){
         string garb = getNextSlice(idx, currInvertedListLine);
         int idDoc = stoi(getNextSlice(idx, currInvertedListLine));
 
+        cout << "    " << currInvertedListLine << endl;
+
         documents.insert(idDoc);
+        countTerm++;
     }
 
-    for (int docId : documents)
-        cout << decompressUrl[docId] << endl;
+    cout << endl << endl << "URLS: " << endl;
+    for (int docId : documents){
+        cout << "    " << docId << "     " << decompressUrl[docId] << endl;
+        countDoc++;
+    }
+
+    cout << "    " << endl << endl << "RESULTS: " << endl;
+    cout << "    " << "Term:  " << term << endl;
+    cout << "    " << "Total Occurrences: " << countTerm << endl;
+    cout << "    " << "Documents (n_i):   " << countDoc << endl;
+    cout << "    " << "IDF: " <<  dictionary[termDictLine[id]].idf << endl << endl << endl; 
 }   

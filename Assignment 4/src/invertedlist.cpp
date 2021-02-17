@@ -2,6 +2,43 @@
 
 using namespace std;
 
+bool comp(const termContainer &lhs, const termContainer &rhs){
+    if (lhs.id == rhs.id and lhs.doc == rhs.doc)
+        return lhs.pos < rhs.pos;
+    if (lhs.id == rhs.id)
+        return lhs.doc < rhs.doc;
+    return lhs.id < rhs.id;
+}
+
+termContainer getContainer(string strTuple){
+    int id;
+    int doc, pos;
+
+    int len = strTuple.size();
+    string tmp;
+
+    int i = 0;
+    while (i < len && strTuple[i] != ' ') 
+        tmp += strTuple[i++];
+    id = stoi(tmp);
+    tmp.clear();
+
+    i++;
+    while (i < len && strTuple[i] != ' ') 
+        tmp += strTuple[i++];
+    doc = stoi(tmp);
+    tmp.clear();
+
+    i++;
+    while (i < len) 
+        tmp += strTuple[i++];
+    pos = stoi(tmp);
+    
+    termContainer currContainer(id, doc, pos);
+
+    return currContainer;
+}
+
 void buildInvertedLists(){
     //Initialize HTML parser and define the access path
     //to the HTML collection
@@ -10,6 +47,10 @@ void buildInvertedLists(){
 
     //Get access to the HTML collection
     ifstream infile(pathCollection);
+    if(infile.fail()){
+        cout << "Path to file '" << pathCollection << "' not found" << endl;
+        exit(0);
+    }
     string currLine;
 
     //Initialize the file hash map that will maintain information
@@ -28,14 +69,16 @@ void buildInvertedLists(){
 
     //Set the number of HTML documents that will be indexed
     //per inverted list file and total number of HTML documents
-    int maxDocumentsPerFile = 2;
+    int maxDocumentsPerFile = 100; //15625 
     int currDocument = 0;
 
     //Create 64 initial sorted files whre each of them will
     //have an inverted list constructed wih maxDocumentsPerFile HTML
     //documents
+    cout << "Building Inverted Lists on file... " << endl;
     bool finish = false;
     for (int doc = 0; doc < 64; doc++){
+        cout << doc << ' ';
         //Create a empty inverted list where each position is
         //a term container, i.e, a tuple with the term and its
         //respective document and position
@@ -109,7 +152,8 @@ void buildInvertedLists(){
         ofstream outlistfile(outputPath.c_str());
 
         for (termContainer tuple : invertedlist)
-            outlistfile << tuple.id << ' ' << tuple.doc << ' ' << tuple.pos << '\n';        
+            outlistfile << tuple.id << ' ' << tuple.doc << ' ' << tuple.pos << '\n';
+        cout << "DONE" << endl;        
     }
 
     for (string term : vocabulary)
@@ -121,6 +165,7 @@ void buildInvertedLists(){
 }
 
 void mergeInvertedLists(){
+    cout << endl << "Merging Inverted Lists on file..." << endl;
 	for (int it = 6; it > 0; it--){
         for (int j = 0, doc = 0; j < (1 << it); j += 2, doc++){
         	string pathfileA, pathfileB, pathfileMerge;
@@ -182,4 +227,5 @@ void mergeInvertedLists(){
             remove(pathfileB.c_str());
         }
     }
+    cout << "Final Inverted List saved at 'output/invertedList.txt.'" << endl << endl;
 }

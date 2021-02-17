@@ -25,10 +25,12 @@ class Dictionary{
 	public:	
 
 		Dictionary();
-		void query(string term, bool showUrls);
+		void query(string term);
 };
 
-string getNextSlice(int &idx, string str);
+void checkFileDictionary(ifstream &file, string path);
 void buildInFileDictionary();
+
+string getNextSlice(int &idx, string str);
 
 #endif
