@@ -16,7 +16,7 @@ int main(int argc, char const* argv[]) {
     else{
         stringstream streamInput(argv[1]);
         string argcommand; streamInput >> argcommand;
-
+        //To build the files (inverted list, vocabulary, url list, dictionary)
         if (argcommand == "-b"){
             time_t begin, end;
             time(&begin);
@@ -26,22 +26,26 @@ int main(int argc, char const* argv[]) {
             mergeInvertedLists();
             //Create a dictionary to store the information about the occurrences
             //of each term on the final inverted list created, to get more efficient
-            //access to the occurrences information of each term
+            //access to the information of each term occurrence in the collection
             buildInFileDictionary();
             time(&end);
             time_t elapsed = end - begin;
 
-            long hours = elapsed/3600;
-            long minutes = (elapsed%3600)/60;
-            long seconds = elapsed - (hours*3600) - (minutes*60);
+            int hours = elapsed/3600;
+            int minutes = (elapsed%3600)/60;
+            int seconds = elapsed - (hours*3600) - (minutes*60);
 
             cout << endl << "Running approximate time " << hours << "h " << minutes << "m " << seconds << "s " << endl; 
         }
+        //To query for a given term in the collection and ''efficiently'' get
+        //information about its occurrences 
         else if (argcommand == "-q"){
+            //Load the dictionary, vocabulary and url list files on main memory
             Dictionary dict;
             while (true){
                 cout << endl << "Type a term:  ";
                 string term; cin >> term;
+
                 dict.query(term);
                 cout << endl;
             

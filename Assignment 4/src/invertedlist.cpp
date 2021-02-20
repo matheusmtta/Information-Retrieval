@@ -69,7 +69,7 @@ void buildInvertedLists(){
 
     //Set the number of HTML documents that will be indexed
     //per inverted list file and total number of HTML documents
-    int maxDocumentsPerFile = 100; //15625 
+    int maxDocumentsPerFile = 15625;
     int currDocument = 0;
 
     //Create 64 initial sorted files whre each of them will
@@ -84,6 +84,8 @@ void buildInvertedLists(){
         //respective document and position
         vector <termContainer> invertedlist;
 
+        //Just to fit the last 68 html documents
+        if (doc == 63) maxDocumentsPerFile += 68;
         for (int i = 0; i < maxDocumentsPerFile; i++){
             //For each document in each main file we will
             //parse the json information from the collection
@@ -93,7 +95,7 @@ void buildInvertedLists(){
                 break;
             }
             rapidjson::Document lineDocument;
-            lineDocument.Parse<0>(currLine.c_str());
+            lineDocument.Parse(currLine.c_str());
 
             string html = lineDocument["html_content"].GetString();
             string url = lineDocument["url"].GetString();
