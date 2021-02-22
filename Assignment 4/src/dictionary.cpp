@@ -1,5 +1,6 @@
 #include "includes/dictionary.h"
 
+//Check if the input file exists, if it doesn't end the program execution
 void checkFile(ifstream &file, string path){
     if (file.fail()){
         cout << "Path to file '" << path << "' not found." << endl;
@@ -15,6 +16,7 @@ void buildInFileDictionary(){
     string pathDictionary = "output/dictionary.txt";
     ofstream outfileDict(pathDictionary.c_str());
 
+    //Get the first tuple from the inverted list and the first term id
     string currTuple;
     getline(infileInvertedList, currTuple);
 
@@ -26,8 +28,11 @@ void buildInFileDictionary(){
     long long lastTupleId = currTupleId;
     long long lastLine = 0, currLine = 0;
 
+    //We'll iterate through the inverted list setting the information blocks
+    //of each term
     cout << "Building dictionary on file..." << endl;
     while (true){
+        //If there're no more tuples to be read, print the last term block and break the loop
         if (!getline(infileInvertedList, currTuple)){
             outfileDict << lastTupleId << ' ' << lastLine << ' ' << currLine << '\n';
             break;
@@ -38,11 +43,14 @@ void buildInFileDictionary(){
             tmp += currTuple[idx++];
         currTupleId = stoi(tmp);
 
+        //if the current tuple term id is different then the last we set a new access
+        //block relative to the last term in the inverted list
         if (currTupleId != lastTupleId) {
             outfileDict << lastTupleId << ' ' << lastLine << ' ' << currLine << '\n';
             lastLine = currLine;
         }
 
+        //Update the last term id found
         lastTupleId = currTupleId;
         currLine = infileInvertedList.tellg();
     }
@@ -51,6 +59,7 @@ void buildInFileDictionary(){
     infileInvertedList.close();
 }
 
+//Get the next substring of a string separated with spaces
 string getNextSlice(int &idx, string str){
     int len = str.size();
     string tmp;
@@ -63,6 +72,7 @@ string getNextSlice(int &idx, string str){
 }
 
 Dictionary::Dictionary(){
+    //Load files in the main memory
     cout << "Loading files..." << endl;
     string pathDictionary = "output/dictionary.txt";
     string pathVocabulary = "output/vocabularyIdList.txt";
@@ -78,6 +88,7 @@ Dictionary::Dictionary(){
     checkFile(infilePathUrlInd, pathURLsIndex);
 
     string currVocabLine;
+    //Construct the term id and vocabulary information with hash maps
     while (getline(infileVocabulary, currVocabLine)){
         int idx = 0;
 
@@ -91,6 +102,7 @@ Dictionary::Dictionary(){
     }
 
     string currUrlIndLine;
+    //Construct the documents id and urls with hash maps
     while (getline(infilePathUrlInd, currUrlIndLine)){
         int idx = 0;
 
@@ -101,12 +113,19 @@ Dictionary::Dictionary(){
     }
 
     string currInfileDictLine;
+    //Construct the inverted list dictionary with the relative information
+    //of each unique term of the collection 
     while (getline(infileDictionary, currInfileDictLine)){
         int idx = 0; 
 
+        //Get term id and initial/end position in bytes of the term 
+        //in the inverted list to efficient access
         int id = stoi(getNextSlice(idx, currInfileDictLine));
         long long init = stoll(getNextSlice(idx, currInfileDictLine));
         long long end = stoll(getNextSlice(idx, currInfileDictLine));
+        
+        //Set the term frequency of each term in the vocabulary
+        //and its respective idf
         int n_i = termFrequency[id];
         double idf = log2((double)decompressUrl.size()/(double)n_i);
 
@@ -119,6 +138,7 @@ Dictionary::Dictionary(){
 }
 
 void Dictionary::query(string term){
+    //Search for a give term in the inverted list
     cout << "Searching for '" << term << "' in the collection inverted list..." << endl << endl; 
     if (compressTerm.find(term) == compressTerm.end()){
         cout << "There are no matching documents for this term in the collection." << endl;
@@ -133,8 +153,10 @@ void Dictionary::query(string term){
     ifstream infileInvertedList(pathInvertedList, ifstream::binary);
     checkFile(infileInvertedList, pathInvertedList);
 
+    //get the first line in the inverted list relative to the given term
     infileInvertedList.seekg(init, ios::beg);
     
+    //Save all unique urls where the term occurs
     set <int> documents;
 
     cout << "OCCURRENCES (INVERTED LIST): " << endl;
@@ -144,8 +166,8 @@ void Dictionary::query(string term){
 
         string garb = getNextSlice(idx, currInvertedListLine);
         int idDoc = stoi(getNextSlice(idx, currInvertedListLine));
-
-        cout << "    " << currInvertedListLine << endl;
+        //To print the occurrences individual information on terminal erase the comment below
+        //cout << "    " << currInvertedListLine << endl;
 
         documents.insert(idDoc);
         countTerm++;
@@ -153,7 +175,8 @@ void Dictionary::query(string term){
 
     cout << endl << endl << "URLS: " << endl;
     for (int docId : documents){
-        cout << "    " << docId << "     " << decompressUrl[docId] << endl;
+        //To print the urls erase the comment below
+        //cout << "    " << docId << "     " << decompressUrl[docId] << endl;
         countDoc++;
     }
 

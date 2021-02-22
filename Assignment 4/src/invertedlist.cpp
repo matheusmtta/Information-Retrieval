@@ -2,6 +2,8 @@
 
 using namespace std;
 
+//Function used to sort the inverted list by the termContainer term id,
+//document id and occurrence position respectively
 bool comp(const termContainer &lhs, const termContainer &rhs){
     if (lhs.id == rhs.id and lhs.doc == rhs.doc)
         return lhs.pos < rhs.pos;
@@ -10,6 +12,8 @@ bool comp(const termContainer &lhs, const termContainer &rhs){
     return lhs.id < rhs.id;
 }
 
+//From a readen tuple string split the tuple into its respective
+//term container data, term id, document id and occurrence position  
 termContainer getContainer(string strTuple){
     int id;
     int doc, pos;
@@ -166,17 +170,21 @@ void buildInvertedLists(){
     outurllistfile.close();
 }
 
+//Iterate through the inverted list created and mege them into one file in log_2(64) steps
+//similarly to merge sort
 void mergeInvertedLists(){
     cout << endl << "Merging Inverted Lists on file..." << endl;
 	for (int it = 6; it > 0; it--){
         for (int j = 0, doc = 0; j < (1 << it); j += 2, doc++){
         	string pathfileA, pathfileB, pathfileMerge;
             
+            //Open file A and B which will merged into one new file 
             pathfileA = "output/invertedList_" + to_string(it) + "_" + to_string(j) + ".txt";
             pathfileB = "output/invertedList_" + to_string(it) + "_" + to_string(j+1) + ".txt";
             ifstream infileA(pathfileA.c_str());
             ifstream infileB(pathfileB.c_str());
 
+            //Create new file
             if (it-1 == 0)
             	pathfileMerge = "output/invertedList.txt";
             else
@@ -185,26 +193,33 @@ void mergeInvertedLists(){
 
             string lineContentA, lineContentB;
 
+            //Get the first line from each document to initialize the comparisons
             getline(infileA, lineContentA);
             getline(infileB, lineContentB);
 
             termContainer lhsTerm = getContainer(lineContentA);
             termContainer rhsTerm = getContainer(lineContentB);
 
+            //Iterate through both files till both of them get all of its lines read
             bool goNextA = true, goNextB = true;
             while (goNextA || goNextB){
+                //Compare the next line of file A and B
+                //if the next line of A is smaller the B
+                //write the line content of A on the new file
                 if (comp(lhsTerm, rhsTerm)){
                     outfileMerge << lineContentA << "\n";
                     goNextB =  false, goNextA = true;
                 }
-                else{
+                else{ //Otherwise, writhe the line content of B
                     outfileMerge << lineContentB << "\n";
                     goNextB = true, goNextA = false;
                 }
+                //As A was smaller, we need to take the next line from A
                 if (goNextA == true){
                     if (getline(infileA, lineContentA)){
                         lhsTerm = getContainer(lineContentA);
-                    }
+                    } //If there're no more lines to be read on A, write the
+                    //remaining lines of B in the new file
                     else {
                         outfileMerge << lineContentB << "\n";
                         while (getline(infileB, lineContentB))
@@ -212,10 +227,13 @@ void mergeInvertedLists(){
                         goNextA = goNextB = false;
                     }
                 }
-                if (goNextB == true){
+                //As B was smaller, we need to take the next line from B
+                if (goNextB == true){ 
                     if (getline(infileB, lineContentB)){
                         rhsTerm = getContainer(lineContentB);
                     }
+                    //If there're no more lines to be read on A, write the
+                    //remaining lines of B in the new file
                     else {
                         outfileMerge << lineContentA << "\n";
                         while (getline(infileA, lineContentA))
@@ -225,6 +243,7 @@ void mergeInvertedLists(){
                 }
             }
             infileA.close(); infileB.close(); outfileMerge.close();
+            //Delete the merged files
             remove(pathfileA.c_str());
             remove(pathfileB.c_str());
         }
