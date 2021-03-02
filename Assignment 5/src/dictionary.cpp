@@ -212,13 +212,17 @@ void Dictionary::query(string queryStr){
         }
 
         int id = compressTerm[term];
+        
         if ((int)term.length() > 0 && !qryTerms.count(id))
             individualTerms.push_back(term);
         if ((int)term.length() > 0)
             qryTerms[id]++;
     }
 
-    cout << "Clean query: ";
+    for (int i = 0; i < 120; i++){cout << "_";} cout << endl;
+    
+    cout << "[o] Given query text: " << queryStr << endl;
+    cout << "[o] Clean query text: ";
     for (int i = 0; i < (int)individualTerms.size(); i++)
         cout << individualTerms[i] << ' ';
     cout << endl;
@@ -262,7 +266,7 @@ void Dictionary::query(string queryStr){
     for (auto doc : termsPerDocument){
         int e = 1;
         for (int termCount : doc.second) 
-            e |= termCount;
+            e *= termCount;
 
         vector <double> tmp;
 
@@ -310,9 +314,10 @@ void Dictionary::query(string queryStr){
     double exeTime = chrono::duration_cast<chrono::microseconds>(finalExeTime - initialExeTime).count();
 
     cout << endl << endl << "Most relevant document pages:" << endl << endl;
-    for (int i = 0; i < 5; i++){
+    for (int i = 0; i < (int)min(5, (int)resultQuery.size()); i++){
         cout << "[" << i+1 << "]  Document: " << resultQuery[i].first << "     Similarity: " << resultQuery[i].second << endl;
         cout << "     " << decompressUrl[resultQuery[i].first] << endl << endl;
     }
-    cout << endl << "Total number of documents " << candidates.size() << " (" << exeTime*1e-6 << " seconds)" << endl << endl;
+    cout << endl << "Total number of documents " << candidates.size() << " (" << exeTime*1e-6 << " seconds)" << endl;
+    for (int i = 0; i < 120; i++){cout << "_";} cout << endl;
 }

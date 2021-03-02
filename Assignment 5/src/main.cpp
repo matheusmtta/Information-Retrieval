@@ -62,6 +62,7 @@ int main(int argc, char const* argv[]) {
             while (true){
                 cout << endl << "Type your query:    ";
                 string queryStr; getline(cin, queryStr);
+                system ("clear");
 
                 if (queryStr.empty()) exit(0);
                 
