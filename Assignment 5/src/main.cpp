@@ -9,9 +9,9 @@ int main(int argc, char const* argv[]) {
     if (argc < 2){
         cout << "Invalid Input: Not enough arguments" << endl;
         cout << "Options available" << endl << endl;
-        cout << "To build the inverted index and dictionary                      \n      $ ./main -b" << endl << endl;
-        cout << "To query in the inverted list                                   \n      $ ./main -q" << endl << endl;
-        cout << "Otherwise, to query for a given single term in the inverted list\n      $ ./main -t" << endl << endl; 
+        cout << "To build the inverted index and dictionary                            $ ./main -b" << endl << endl;
+        cout << "To query in the inverted list                                         $ ./main -q" << endl << endl;
+        cout << "Otherwise, to query for a given single term in the inverted list      $ ./main -t" << endl << endl; 
         exit(0);
     }
     else{
@@ -59,17 +59,21 @@ int main(int argc, char const* argv[]) {
         }
         else if (argcommand == "-q"){
             Dictionary dict;
-            cout << endl << "Type your query:    ";
-            string queryStr; getline(cin, queryStr);
+            while (true){
+                cout << endl << "Type your query:    ";
+                string queryStr; getline(cin, queryStr);
 
-            dict.query(queryStr);
+                if (queryStr.empty()) exit(0);
+                
+                dict.query(queryStr);
+            }
         }
         else{
             cout << "Invalid Input: Unknown argcommand" << endl;
             cout << "Options available" << endl << endl ;
-            cout << "To build the inverted index and dictionary                      \n      $ ./main -b" << endl << endl;
-            cout << "To query in the inverted list                                   \n      $ ./main -q" << endl << endl;
-            cout << "Otherwise, to query for a given single term in the inverted list\n      $ ./main -t" << endl << endl; 
+            cout << "To build the inverted index and dictionary                            $ ./main -b" << endl << endl;
+            cout << "To query in the inverted list                                         $ ./main -q" << endl << endl;
+            cout << "Otherwise, to query for a given single term in the inverted list      $ ./main -t" << endl << endl; 
             exit(0);    
         }
     }

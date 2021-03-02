@@ -187,9 +187,15 @@ void Dictionary::queryTerm(string term){
     cout << "    " << "IDF: " <<  dictionary[termDictLine[id]].idf << endl << endl << endl; 
 }
 
-bool rankComp(const pair<int, double> &lhs, const pair<int, double> &rhs){return lhs.second > rhs.second;}   
+bool rankComp(const pair<int, double> &lhs, const pair<int, double> &rhs){
+    if (lhs.second == rhs.second)
+        return lhs.first < rhs.first;
+    return lhs.second > rhs.second;
+}   
 
 void Dictionary::query(string queryStr){
+    auto initialExeTime = chrono::high_resolution_clock::now();
+
     Parser parser;
     string cleanQueryText = parser.getCleanText(queryStr);
     
@@ -199,6 +205,12 @@ void Dictionary::query(string queryStr){
     unordered_map <int,int> qryTerms;
     while (idx < (int)queryStr.size()){
         string term = getNextSlice(idx, cleanQueryText);
+
+        if (compressTerm.find(term) == compressTerm.end()){
+            cout << endl << "There're no matching documents for your query." << endl;
+            return;
+        }
+
         int id = compressTerm[term];
         if ((int)term.length() > 0 && !qryTerms.count(id))
             individualTerms.push_back(term);
@@ -206,8 +218,9 @@ void Dictionary::query(string queryStr){
             qryTerms[id]++;
     }
 
+    cout << "Clean query: ";
     for (int i = 0; i < (int)individualTerms.size(); i++)
-        cout << individualTerms[i] << endl;
+        cout << individualTerms[i] << ' ';
     cout << endl;
 
     string pathInvertedList = "output/invertedList.txt";
@@ -220,6 +233,7 @@ void Dictionary::query(string queryStr){
     
     for (int i = 0; i < (int)individualTerms.size(); i++){
         string term = individualTerms[i];
+
         int id = compressTerm[term], dictionaryIdx = termDictLine[id];
         long long init = dictionary[dictionaryIdx].init;
         long long end = dictionary[dictionaryIdx].end;
@@ -263,11 +277,9 @@ void Dictionary::query(string queryStr){
         }
     }
 
-    cout << candidates.size() << endl;
-
     if (candidates.size() == 0){
-        cout << "There're no matching documents for your query" << endl;
-        exit(0);
+        cout << endl << "There're no matching documents for your query." << endl;
+        return;
     }
 
     vector <double> basis;
@@ -284,15 +296,23 @@ void Dictionary::query(string queryStr){
         double dotAB = 0, normA = 0, normB = 0;
         for (int j = 0; j < (int)individualTerms.size(); j++){
             dotAB += basis[j]*candidates[i].second[j];
+
             normA += candidates[i].second[j]*candidates[i].second[j];
             normB += basis[j]*basis[j];
         }
-        double sym = dotAB/(normA*normB);
+        double sym = dotAB/(sqrt(normA)*sqrt(normB));
         resultQuery.push_back({candidates[i].first, sym});
     }
 
     sort(resultQuery.begin(), resultQuery.end(), rankComp);
 
-    for (int i = 0; i < 10; i++)
-        cout << resultQuery[i].first << "      " << resultQuery[i].second << "     " << decompressUrl[resultQuery[i].first] << endl;
+    auto finalExeTime = chrono::high_resolution_clock::now();
+    double exeTime = chrono::duration_cast<chrono::microseconds>(finalExeTime - initialExeTime).count();
+
+    cout << endl << endl << "Most relevant document pages:" << endl << endl;
+    for (int i = 0; i < 5; i++){
+        cout << "[" << i+1 << "]  Document: " << resultQuery[i].first << "     Similarity: " << resultQuery[i].second << endl;
+        cout << "     " << decompressUrl[resultQuery[i].first] << endl << endl;
+    }
+    cout << endl << "Total number of documents " << candidates.size() << " (" << exeTime*1e-6 << " seconds)" << endl << endl;
 }
