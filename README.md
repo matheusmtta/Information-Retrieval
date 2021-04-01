@@ -1,5 +1,5 @@
 # Information-Retrieval
-Information Retrieval DCC030 (UFMG-2020/2)
+Information Retrieval DCC030 (UFMG-2020/2) 
 
 Professor: Berthier Ribeiro-Neto
 
